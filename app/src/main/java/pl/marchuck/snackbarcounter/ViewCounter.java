@@ -1,67 +1,65 @@
 package pl.marchuck.snackbarcounter;
 
-import android.support.annotation.Nullable;
+import android.support.annotation.NonNull;
 
 import java.util.concurrent.TimeUnit;
 
-import rx.Subscriber;
-import rx.android.schedulers.AndroidSchedulers;
+import io.reactivex.Observable;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.Disposable;
 
-/**
- * @author Lukasz Marczak
- * @since 08.07.16.
- */
 public class ViewCounter {
-    public interface Updatable {
-        void onUpdate(long tic);
+
+    @NonNull
+    private final Updatable updatable;
+    private final long initialDelay;
+
+    private Disposable disposable;
+
+    private ViewCounter(Builder builder) {
+        updatable = builder.updatable;
+        initialDelay = builder.initialDelay;
     }
 
-    @Nullable
-    private Updatable updatable;
-    private long initialDelay = 0;
-    private rx.Subscription subscription;
+    void start() {
 
-    public ViewCounter() {
-    }
+        stop();
 
-
-    public ViewCounter withInitialDelay(long secondsDelay) {
-
-        this.initialDelay = secondsDelay;
-        return this;
-    }
-
-    public ViewCounter withUpdatable(Updatable updatable) {
-        this.updatable = updatable;
-        return this;
-    }
-
-    public void start() {
-        if (updatable == null) {return;}
-        this.subscription = rx.Observable.interval(initialDelay, 1, TimeUnit.SECONDS)
-                .subscribeOn(AndroidSchedulers.mainThread())
+        disposable = Observable.interval(initialDelay, 1, TimeUnit.SECONDS)
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(new Subscriber<Long>() {
-                    @Override
-                    public void onCompleted() {
+                .subscribe(updatable::onUpdate,
+                        throwable -> updatable.onUpdate(0)
+                );
 
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        if (updatable != null) updatable.onUpdate(0);
-                    }
-
-                    @Override
-                    public void onNext(Long aLong) {
-                        if (updatable != null) updatable.onUpdate(aLong);
-                    }
-                });
     }
 
-    public void stop() {
-        if (updatable != null) updatable = null;
-        if (subscription != null) subscription.unsubscribe();
-        subscription = null;
+    void stop() {
+        if (disposable != null) {
+            disposable.dispose();
+        }
+        disposable = null;
+    }
+
+
+    public static final class Builder {
+        private Updatable updatable;
+        private long initialDelay;
+
+        public Builder() {
+        }
+
+        public Builder updatable(Updatable val) {
+            updatable = val;
+            return this;
+        }
+
+        public Builder initialDelay(long val) {
+            initialDelay = val;
+            return this;
+        }
+
+        public ViewCounter build() {
+            return new ViewCounter(this);
+        }
     }
 }
